@@ -2,6 +2,7 @@ package com.example.sakura.integrated.db.service
 
 import com.example.sakura.integrated.common.ResultCode
 import com.example.sakura.integrated.common.ResultCodeException
+import com.example.sakura.integrated.db.dto.GetUserDTO
 import com.example.sakura.integrated.db.enum.Grade
 import com.example.sakura.integrated.db.model.User
 import io.netty.channel.ChannelOption
@@ -9,11 +10,14 @@ import io.netty.channel.ConnectTimeoutException
 import net.sf.json.JSONObject
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.ThreadContext
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.http.client.reactive.ReactorClientHttpConnector
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClient
+import reactor.core.publisher.Mono
 import reactor.netty.http.client.HttpClient
 import reactor.util.retry.Retry
 import java.time.Duration
@@ -112,19 +116,20 @@ class UserApiService(
         }
     }
 
-    fun getUserById(id: Long?): User {
-        if (id == null) {
+    fun getUserById(userId: Long?): User {
+        if (userId == null) {
             throw ResultCodeException(
                 resultCode = ResultCode.ERROR_PARAMETER_TYPE,
                 loglevel = Level.INFO
             )
         }
 
-        val uri = USER_API_PROXY + USER_API_GET_USER_BY_ID.replace("{id}", id.toString())
+        val uri = USER_API_PROXY + USER_API_GET_USER_BY_ID
         try {
-            val result = webClient
-                .get()
+            val result = webClient.method(HttpMethod.GET)
                 .uri(uri)
+                .header("requestUuid", ThreadContext.get("requestUuid"))
+                .body(Mono.just(GetUserDTO(id = userId)), GetUserDTO::class.java)
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
                 .bodyToMono(JSONObject::class.java)
@@ -135,24 +140,47 @@ class UserApiService(
                 )
                 .block() ?: throw ResultCodeException(
                 resultCode = ResultCode.ERROR_USER_CONNECTION,
-                loglevel = Level.INFO
+                loglevel = Level.INFO,
             )
 
-            log.info("get User by Id. uri: $uri, response: $result")
+            log.info("get User by Id. uri: $uri, result: $result")
             if (result["rtncd"] != 1000) {
                 //실패
                 throw ResultCodeException(
                     resultCode = ResultCode.ERROR_USER_RESPONSE,
-                    loglevel = Level.INFO
+                    loglevel = Level.INFO,
+                    message = "[${result.get("rtncd")}] ${result.get("rtnmsg")}"
                 )
             }
-            val response = result["response"] as JSONObject
-            val id = response["id"] as Long
+
+            val response =
+                try {
+                    result["response"] as JSONObject
+                } catch (e: Exception) {
+                    throw ResultCodeException(
+                        resultCode = ResultCode.ERROR_USER_RESPONSE,
+                        loglevel = Level.WARN,
+                        message = "response is null"
+                    )
+                }
+
+
+            val id = try {
+                response["id"].toString().toLong()
+            } catch (e: Exception) {
+                throw ResultCodeException(
+                    resultCode = ResultCode.ERROR_USER_RESPONSE,
+                    loglevel = Level.WARN,
+                    message = "id is null"
+                )
+            }
+
             val name = response["name"] as String
             val nickname = response["nickname"] as String
             val email = response["email"] as String
             val grade = Grade.valueOf(response["grade"] as String)
-            val point = response["point"] as Int
+            val point = response["point"].toString().toLong()
+
 
             return User(
                 id = id,
@@ -160,7 +188,7 @@ class UserApiService(
                 nickname = nickname,
                 email = email,
                 grade = grade,
-                point = point.toLong()
+                point = point
             )
         } catch (e: ResultCodeException) {
             throw e

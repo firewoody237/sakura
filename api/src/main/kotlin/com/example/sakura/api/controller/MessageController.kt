@@ -1,9 +1,6 @@
 package com.example.sakura.api.controller
 
-import com.example.sakura.integrated.db.dto.CreateMessageDTO
-import com.example.sakura.integrated.db.dto.GetMessagesDTO
-import com.example.sakura.integrated.db.dto.ReadMessageDTO
-import com.example.sakura.integrated.db.dto.ReplyMessageDTO
+import com.example.sakura.integrated.db.dto.*
 import com.example.sakura.integrated.db.entity.Message
 import com.example.sakura.integrated.db.service.MessageService
 import com.example.sakura.integrated.webservice.api.ApiRequestMapping
@@ -103,5 +100,12 @@ class MessageController(
             receiverId = message.receiverId,
             originalMessageId = message.originalMessageId
         )
+    }
+
+    @ApiRequestMapping("/message/emoji", method = [RequestMethod.PUT])
+    fun updateEmoji(@RequestBody updateMessageEmoji: UpdateMessageEmoji) {
+        log.debug("updateEmoji, updateMessageEmoji = '$updateMessageEmoji'")
+
+        messageService.updateMessageEmoji(updateMessageEmoji)
     }
 }

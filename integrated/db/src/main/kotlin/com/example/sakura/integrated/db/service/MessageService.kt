@@ -24,7 +24,7 @@ class MessageService(
     fun createMessage(createMessageDTO: CreateMessageDTO): Message {
         log.debug("call createMessage, createMessageDTO = '$createMessageDTO'")
 
-        if (createMessageDTO.senderId == 0L) {
+        if (createMessageDTO.senderId == null) {
             throw ResultCodeException(
                 resultCode = ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.WARN,
@@ -32,7 +32,7 @@ class MessageService(
             )
         }
 
-        if (createMessageDTO.receiverId == 0L) {
+        if (createMessageDTO.receiverId == null) {
             throw ResultCodeException(
                 resultCode = ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.WARN,
@@ -75,7 +75,7 @@ class MessageService(
     fun readMessage(readMessageDTO: ReadMessageDTO): Message {
         log.debug("call readMessage, readMessageDTO = '$readMessageDTO'")
 
-        if (readMessageDTO.id == 0L) {
+        if (readMessageDTO.id == null) {
             throw ResultCodeException(
                 resultCode = ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.WARN,
@@ -83,7 +83,7 @@ class MessageService(
             )
         }
 
-        if (readMessageDTO.readerId == 0L) {
+        if (readMessageDTO.readerId == null) {
             throw ResultCodeException(
                 resultCode = ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.WARN,
@@ -105,10 +105,10 @@ class MessageService(
         return messageRepository.save(foundMessage)
     }
 
-    fun getMessage(id: Long): Message {
+    fun getMessage(id: Long?): Message {
         log.debug("call getMessage, id = '$id'")
 
-        if (id == 0L) {
+        if (id == null) {
             throw ResultCodeException(
                 resultCode = ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.WARN,
@@ -138,7 +138,7 @@ class MessageService(
     fun getMessagesByUserId(getMessagesDTO: GetMessagesDTO): MutableList<Message> {
         log.debug("call getMessages, getMessagesDTO = '$getMessagesDTO'")
 
-        if (getMessagesDTO.userId == 0L) {
+        if (getMessagesDTO.userId == null) {
             throw ResultCodeException(
                 resultCode = ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.WARN,
@@ -154,12 +154,23 @@ class MessageService(
             )
         }
 
-        val messages = messageRepository.getMessagesBySenderId(getMessagesDTO.userId)
+        var messages = mutableListOf<Message>()
+        when (getMessagesDTO.senderOrReceiver) {
+            "S" -> messageRepository.getMessagesBySenderId(getMessagesDTO.userId)
+            "R" -> messageRepository.getMessagesByReceiverId(getMessagesDTO.userId)
+            else -> throw ResultCodeException(
+                resultCode = ResultCode.ERROR_PARAMETER_TYPE,
+                loglevel = Level.WARN,
+                message = "R(Receiver)과 S(Sender)둘 중 하나만 입력해주세요."
+            )
+        }
+        messageRepository.getMessagesBySenderId(getMessagesDTO.userId)
 
         when (messages.size) {
             0 -> throw ResultCodeException(
                 resultCode = ResultCode.ERROR_MESSAGE_NOT_EXIST,
                 loglevel = Level.WARN,
+                message = "메세지가 존재하지않습니다."
             )
             else -> return messages
         }
@@ -169,7 +180,7 @@ class MessageService(
     fun replyMessage(replyMessageDTO: ReplyMessageDTO): Message {
         log.debug("call replyMessage, replyMessageDTO = '$replyMessageDTO'")
 
-        if (replyMessageDTO.senderId == 0L) {
+        if (replyMessageDTO.senderId == null) {
             throw ResultCodeException(
                 ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.INFO,
@@ -177,7 +188,7 @@ class MessageService(
             )
         }
 
-        if (replyMessageDTO.receiverId == 0L) {
+        if (replyMessageDTO.receiverId == null) {
             throw ResultCodeException(
                 ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.INFO,
@@ -185,11 +196,19 @@ class MessageService(
             )
         }
 
-        if (replyMessageDTO.originalMessageId == 0L) {
+        if (replyMessageDTO.originalMessageId == null) {
             throw ResultCodeException(
                 ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.INFO,
                 message = "파라미터에 [originalMessageId]이 존재하지 않습니다."
+            )
+        }
+
+        if (replyMessageDTO.content == null) {
+            throw ResultCodeException(
+                ResultCode.ERROR_PARAMETER_NOT_EXISTS,
+                loglevel = Level.INFO,
+                message = "파라미터에 [content]이 존재하지 않습니다."
             )
         }
 
@@ -220,7 +239,7 @@ class MessageService(
     fun updateMessageEmoji(updateMessageEmoji: UpdateMessageEmoji) {
         log.debug("call updateMessageEmoji, updateMessageEmoji = '$updateMessageEmoji'")
 
-        if (updateMessageEmoji.id == 0L) {
+        if (updateMessageEmoji.id == null) {
             throw ResultCodeException(
                 ResultCode.ERROR_PARAMETER_NOT_EXISTS,
                 loglevel = Level.INFO,
@@ -228,23 +247,7 @@ class MessageService(
             )
         }
 
-        if (updateMessageEmoji.receiverId == 0L) {
-            throw ResultCodeException(
-                ResultCode.ERROR_PARAMETER_NOT_EXISTS,
-                loglevel = Level.INFO,
-                message = "파라미터에 [updateMessageEmoji]이 존재하지 않습니다."
-            )
-        }
-
         val foundMessage = getMessage(updateMessageEmoji.id)
-        val foundUser = userApiService.getUserById(updateMessageEmoji.receiverId)
-
-        if (foundMessage.receiverId != foundUser.id) {
-            throw ResultCodeException(
-                ResultCode.ERROR_MESSAGE_READER_AND_RECEIVER_NOT_SAME,
-                loglevel = Level.INFO,
-            )
-        }
 
         foundMessage.emoji = updateMessageEmoji.emoji
         messageRepository.save(foundMessage)
